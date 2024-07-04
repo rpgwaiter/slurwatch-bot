@@ -1,20 +1,36 @@
-import { Client, Events, GatewayIntentBits, GuildBasedChannel } from 'discord.js'
-import { VoiceConnectionStatus, AudioPlayerStatus, joinVoiceChannel, getVoiceConnection , } from '@discordjs/voice'
-import type { Collection, Guild, GuildMember } from 'discord.js'
+import { Client, Events, GatewayIntentBits } from 'discord.js'
+import { joinVoiceChannel, getVoiceConnection } from '@discordjs/voice'
+import { Downloader } from 'nodejs-file-downloader'
 import 'dotenv/config'
+import type { Collection, Guild, GuildMember, GuildBasedChannel } from 'discord.js'
 
 const { SLURWATCH_TOKEN = '', SLURWATCH_GUILD_IDS = '', SLURWATCH_VOICE_CHANNELS = '' } = process.env
 
-// Create a new client instance
-const client = new Client({ intents: [
-  GatewayIntentBits.Guilds,
-  GatewayIntentBits.GuildVoiceStates,
-  GatewayIntentBits.GuildMembers,
-  GatewayIntentBits.GuildMessages,
-  GatewayIntentBits.GuildPresences,
-  GatewayIntentBits.MessageContent
-] })
+// First lets make sure we have the STT model downloaded
+await (new Downloader({
+  url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin?download=true',
+  directory: './models',
+  skipExistingFileName: true,
+  onProgress: function (percentage, chunk, remainingSize) {
+    // Gets called every chunk
+    console.clear()
+    console.log('Downloading local STT model from huggingface\n')
+    console.log('Remaining bytes:', remainingSize)
+    console.log(`Downloaded ${percentage}% `)
+  }
+})).download()
 
+// Create a new client instance
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildPresences,
+    GatewayIntentBits.MessageContent
+  ]
+})
 
 // Ran once the client successfully connects/auths
 client.once(Events.ClientReady, readyClient => {
@@ -33,18 +49,16 @@ client.once(Events.ClientReady, readyClient => {
       guildId: channel.guild.id,
       adapterCreator: guild.voiceAdapterCreator,
       selfDeaf: false,
-      selfMute: false,
+      selfMute: false
     })
   }
-  
 })
-
 
 // Ran any time someone joins or leaves a voice channel
 client.on(Events.VoiceStateUpdate, async voiceClient => {
   const username: string = voiceClient.member?.user.username! // Who's status changed
 
-  const guild: Guild = voiceClient.guild!
+  const guild: Guild = voiceClient.guild
   const channel: GuildBasedChannel = guild.channels.cache.get(SLURWATCH_VOICE_CHANNELS)!
 
   // Get the current voice channel if we're already in one
@@ -52,10 +66,9 @@ client.on(Events.VoiceStateUpdate, async voiceClient => {
 
   const members = channel.members as Collection<string, GuildMember>
   const memberLength = members.size
- 
 
   // An event happens on connect or disconnect, so lets see what it is
-  if (!voiceClient.channel && username !== 'slurwatch') {
+  if ((voiceClient.channel == null) && username !== 'slurwatch') {
     console.log(`[${username}] - Connected`)
     connection = joinVoiceChannel({
       channelId: channel.id,
@@ -68,7 +81,7 @@ client.on(Events.VoiceStateUpdate, async voiceClient => {
     connection.once(Events.ClientReady, conn => {
       console.log('Connected to Voice Channel:', channel.name)
     })
-    
+
     // From here we should get the audio stream and pass it to the STT service
     // const audio = connection.receiver.createStream(message.member)
     // console.log(audio)
