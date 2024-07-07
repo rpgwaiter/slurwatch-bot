@@ -1,24 +1,11 @@
 import { Client, Events, GatewayIntentBits } from 'discord.js'
 import { joinVoiceChannel, getVoiceConnection } from '@discordjs/voice'
-import { Downloader } from 'nodejs-file-downloader'
+
 import 'dotenv/config'
 import type { Collection, Guild, GuildMember, GuildBasedChannel } from 'discord.js'
+import { listenIn } from './lib'
 
 const { SLURWATCH_TOKEN = '', SLURWATCH_GUILD_IDS = '', SLURWATCH_VOICE_CHANNELS = '' } = process.env
-
-// First lets make sure we have the STT model downloaded
-await (new Downloader({
-  url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin?download=true',
-  directory: './models',
-  skipExistingFileName: true,
-  onProgress: function (percentage, chunk, remainingSize) {
-    // Gets called every chunk
-    console.clear()
-    console.log('Downloading local STT model from huggingface\n')
-    console.log('Remaining bytes:', remainingSize)
-    console.log(`Downloaded ${percentage}% `)
-  }
-})).download()
 
 // Create a new client instance
 const client = new Client({
@@ -42,6 +29,8 @@ client.once(Events.ClientReady, readyClient => {
   const members = channel.members as Collection<string, GuildMember>
   const memberLength = members.size
 
+  // TODO: If we're already in a channel, this will pass
+  // Maybe we should see if the 1 member is just us
   if (memberLength) {
     console.log(`There's ${memberLength} people in (${channel.name}). Joining...`)
     joinVoiceChannel({
@@ -52,6 +41,22 @@ client.once(Events.ClientReady, readyClient => {
       selfMute: false
     })
   }
+})
+
+client.once(Events.VoiceStateUpdate, async voiceClient => {
+  console.log('Adding listeners')
+  const guild = voiceClient.guild
+  const channel = guild.channels.cache.get(SLURWATCH_VOICE_CHANNELS)!
+  let connection = getVoiceConnection(voiceClient.guild.id) // See if we already have a connection
+  connection ||= joinVoiceChannel({ // if not, let's connect
+    channelId: channel.id,
+    guildId: channel.guild.id,
+    adapterCreator: guild.voiceAdapterCreator,
+    selfDeaf: false,
+    selfMute: false
+  })!
+
+  listenIn(connection)
 })
 
 // Ran any time someone joins or leaves a voice channel
@@ -69,24 +74,20 @@ client.on(Events.VoiceStateUpdate, async voiceClient => {
 
   // An event happens on connect or disconnect, so lets see what it is
   if ((voiceClient.channel == null) && username !== 'slurwatch') {
-    console.log(`[${username}] - Connected`)
-    connection = joinVoiceChannel({
+    const connectConfig = {
       channelId: channel.id,
       guildId: channel.guild.id,
       adapterCreator: guild.voiceAdapterCreator,
       selfDeaf: false,
       selfMute: false
-    })!
-
-    connection.once(Events.ClientReady, conn => {
-      console.log('Connected to Voice Channel:', channel.name)
-    })
-
-    // From here we should get the audio stream and pass it to the STT service
-    // const audio = connection.receiver.createStream(message.member)
-    // console.log(audio)
-    // const file = fs.createWriteStream('recording.pcm')
-    //   audio.pipe(file)
+    }
+    console.log(`[${username}] - Connected`)
+    connection ||= joinVoiceChannel(connectConfig)!
+    // Rejoin if we left
+    if (connection?.state.status === 'disconnected') {
+      console.log('rejoining..')
+      connection.rejoin(connectConfig)
+    }
   } else {
     username !== 'slurwatch' && console.log(`[${username}] - Disconnected`)
     if (memberLength === 1) { // if we're the only one in the channel we can leave
@@ -97,4 +98,4 @@ client.on(Events.VoiceStateUpdate, async voiceClient => {
 })
 
 // Log in to Discord with your client's token
-client.login(SLURWATCH_TOKEN)
+await client.login(SLURWATCH_TOKEN)

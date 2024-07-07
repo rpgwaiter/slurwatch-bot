@@ -9,3 +9,12 @@
 ### Requirements
 
 - bun (js runtime)
+
+So, this bot will record all activity in a voice channel and drop .wav files in a specified dir (in .env)
+
+
+### TODO:
+
+- Listen to any channel in a guild with a person in it, not just the ones specified
+- Setup whisper inotify service that waits for recordings and auto transcribes them, deleting the recording afterwards (this is due to the js bindings for whisper.cpp being garbage)
+- Maybe someday rewrite this in python since the whisper bindings seem a LOT better on the py side
