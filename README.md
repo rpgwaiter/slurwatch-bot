@@ -13,4 +13,6 @@
 ### TODO:
 - Listen to any channel in a guild with a person in it, not just the ones specified
 - Streamline install
-- Add recording .json files to a 
+- Add recording .json files to a sqlite db so we can search through people's histories easily
+- Add command to list people's offenses (e.g. /slurs username)
+- Optimize the transcription code, use quantized models
