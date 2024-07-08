@@ -1,0 +1,9 @@
+services:
+  bot:
+    build: ./bot
+    volumes:
+      - ./recordings:/mnt/recordings:rw
+  transcribe:
+    build: ./transcribe
+    volumes:
+      - ./recordings:/mnt/recordings:rw

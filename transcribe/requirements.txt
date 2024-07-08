@@ -1,0 +1,5 @@
+whisper-cpp-python
+numpy<2
+asyncio
+# discord.py[voice]
+# pytz

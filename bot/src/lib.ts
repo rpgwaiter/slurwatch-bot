@@ -1,12 +1,15 @@
 import { EndBehaviorType, type VoiceConnection } from '@discordjs/voice'
 import { Transform } from 'node:stream'
 import OpusScript from 'opusscript'
+import { renameSync } from 'fs'
 
 // @ts-expect-error
 import { FileWriter } from 'wav'
 
-// Typescript is weird, man
-const { SLURWATCH_RECORDING_DIR } = process.env || { SLURWATCH_RECORDING_DIR: `${__dirname}/../recordings` }
+// TODO: take this from env
+// const recordingDir = `${__dirname}/../recordings`
+// const { SLURWATCH_RECORDING_DIR } = process.env || { SLURWATCH_RECORDING_DIR: `${__dirname}/../recordings` }
+const recordingDir = process.env['SLURWATCH_RECORDING_DIR'] || `${__dirname}/../recordings`
 
 class OpusDecodingStream extends Transform {
   encoder
@@ -26,15 +29,19 @@ class OpusDecodingStream extends Transform {
 
 // Listens to people talking and spits out a wav file
 export function listenIn (client: VoiceConnection) {
+  let pathToFile: string
+  let endToFile: string
+  let sub
   client.receiver?.speaking.on('start', userId => { // ran when someone starts talking
     try {
-      const sub = client.receiver.subscribe(userId, {
+      sub = client.receiver.subscribe(userId, {
         end: {
           behavior: EndBehaviorType.AfterSilence,
           duration: 1000
         }
       })
-      const pathToFile = `${SLURWATCH_RECORDING_DIR}/${userId}-${Date.now()}.wav`
+      pathToFile = `${recordingDir}/${userId}-${Date.now()}.writing`
+      endToFile = `${recordingDir}/${userId}-${Date.now()}.wav`
 
       const encoder = new OpusScript(
         OpusScript.VALID_SAMPLING_RATES[2], // 16000
@@ -50,11 +57,21 @@ export function listenIn (client: VoiceConnection) {
         }))
 
       console.log(`${userId} is speaking...`)
+
+      
     } catch (e) {
       console.warn(e)
     }
   })
   client.receiver?.speaking.on('end', userId => { // when they stop talking
     console.log(`${userId} stopped speaking`)
+    sub?.destroy() // Ensure no further writes
+    sub = client.receiver.subscribe(userId, {
+      end: {
+        behavior: EndBehaviorType.AfterSilence,
+        duration: 1000
+      }
+    })
+    renameSync(pathToFile, endToFile)
   })
 }
