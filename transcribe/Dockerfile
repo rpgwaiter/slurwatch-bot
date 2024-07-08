@@ -10,4 +10,4 @@ ENV STT_MODEL=ggml-tiny.en.bin
 ADD ./models ./models/
 
 COPY ./src .
-CMD [ "/usr/local/bin/python", "/usr/src/app/main.py" ]
+CMD [ "/usr/local/bin/python", "-u", "/usr/src/app/main.py" ]
